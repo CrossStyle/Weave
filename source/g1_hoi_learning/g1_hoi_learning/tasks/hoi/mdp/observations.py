@@ -282,5 +282,11 @@ def motion_future_contact_label(env: ManagerBasedEnv, command_name: str) -> torc
 def contact(env: ManagerBasedEnv, sensor_name: str, threshold: float = 1.0) -> torch.Tensor:
     """Per-robot-body binary contact flag with object from force_matrix_w. (num_envs, 54)"""
     sensor = env.scene[sensor_name]
-    forces = sensor.data.force_matrix_w[:, 0, :, :]  # (num_envs, 54, 3)
+    # force_matrix_w shape: (num_envs, num_bodies, num_filters, 3)
+    # Check if there are any bodies being monitored
+    if sensor.data.force_matrix_w is None or sensor.data.force_matrix_w.shape[1] == 0:
+        # Return zeros if no contact data available
+        num_filters = len(sensor.cfg.filter_prim_paths_expr)
+        return torch.zeros(env.num_envs, num_filters, device=sensor.device)
+    forces = sensor.data.force_matrix_w[:, 0, :, :]  # (num_envs, num_filters, 3)
     return (forces.norm(dim=-1) > threshold).float()

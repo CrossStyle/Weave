@@ -16,21 +16,27 @@ defaults:
 # =============================================================================
 
 env:
+  episode_length_s: 10.0  # hframe: 35  ladder: 50
   scene:
     num_envs: 4096
 
   commands:
     motion:
       motion_files:
-        - ./data/test/clothesstand_29clip_var5.npz
-        - ./data/test/floorlamp_33clip_var5.npz
-        - ./data/test/largebox_46clip_var5.npz
-        - ./data/test/largetable_36clip_var5.npz
-        - ./data/test/smallbox_24clip_var5.npz
-        - ./data/test/smalltable_42clip_var5.npz
-        - ./data/test/tripod_30clip_var5.npz
-        - ./data/test/whitechair_35clip_var5.npz
-        - ./data/test/woodchair_46clip_var5.npz
+#        - ./data/test/clothesstand_29clip_var5.npz
+#        - ./data/test/floorlamp_33clip_var5.npz
+#        - ./data/test/largebox_46clip_var5.npz
+#        - ./data/test/largetable_36clip_var5.npz
+#        - ./data/test/smallbox_24clip_var5.npz
+#        - ./data/test/smalltable_42clip_var5.npz
+#        - ./data/test/tripod_30clip_var5.npz
+#        - ./data/test/whitechair_35clip_var5.npz
+#        - ./data/test/woodchair_46clip_var5.npz
+#        - ./data/test/floorlamp_33clip_var5_first_motion.npz
+#        - ./data/datasets/Weave/rollout/train/sub17_woodchair.npz
+#        - ./source/g1_hoi_learning/g1_hoi_learning/objects/h_frame/h_frame_weave.npz
+#        - ./data/eval/woodchair.npz
+          - ./source/g1_hoi_learning/g1_hoi_learning/objects/ladder/ladder_weave_8s.npz
       rsi: true
 
   # ---- reward weights & params ----
@@ -41,8 +47,14 @@ env:
     motion_body_ori:      { weight: 1.0, params: { command_name: motion, std: 0.4 } }
     object_pos:           { weight: 2.0, params: { command_name: motion, std: 0.2 } }
     object_ori:           { weight: 2.0, params: { command_name: motion, std: 0.3 } }
-    hand_opposition:
+    hand_obj_rel_pos:
       weight: 2.0
+      params:
+        command_name: motion
+        hand_body_names: [".*_thumb_distal", ".*_(index|middle|ring|pinky)_intermediate"]
+        std: 0.05
+    hand_opposition:
+      weight: 0.0
       params:
         command_name: motion
         thumb_body_name: thumb_distal
@@ -53,7 +65,7 @@ env:
         command_name: motion
         sensor_name: contact_sensor
         hand_body_names: [".*_thumb_intermediate", ".*_thumb_distal", ".*_index_intermediate", ".*_middle_intermediate", ".*_ring_intermediate", ".*_pinky_intermediate"]
-        saturate_force: 5.0
+        saturate_force: 15.0
     feet_air_time:        { weight: 0.5 }
     feet_slide:           { weight: -1.0 }
     action_rate_l2:       { weight: -0.1 }

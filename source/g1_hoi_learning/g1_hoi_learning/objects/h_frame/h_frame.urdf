@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot name="H-frame_scaffolding_urdf_mesh">
+    <!--    <mujoco>-->
+    <!--        <compiler-->
+    <!--        meshdir="meshes/"-->
+    <!--        discardvisual="false" />-->
+    <!--  </mujoco>-->
+
+<!--    <link name="left_hand">-->
+<!--        <inertial>-->
+<!--            <origin xyz="0 0 0" rpy="0 0 0"/>-->
+<!--            <mass value="0.01"/>-->
+<!--            <inertia-->
+<!--                        ixx="4.000000E-09"-->
+<!--                        ixy="0.000000E+00"-->
+<!--                        ixz="0.000000E+00"-->
+<!--                        iyy="4.000000E-09"-->
+<!--                        iyz="0.000000E+00"-->
+<!--                        izz="4.000000E-09"/>-->
+<!--        </inertial>-->
+<!--        <visual>-->
+<!--            <origin xyz="0 0 0" rpy="0 0 0"/>-->
+
+<!--            <geometry>-->
+<!--              <sphere radius="0.001"/>-->
+<!--            </geometry>-->
+
+<!--            <material name="red">-->
+<!--              <color rgba="1.0 0.0 0.0 1.0"/>-->
+<!--            </material>-->
+<!--      </visual>-->
+<!--    </link>-->
+
+<!--    <link name="right_hand">-->
+<!--        <inertial>-->
+<!--            <origin xyz="0 0 0" rpy="0 0 0"/>-->
+<!--            <mass value="0.01"/>-->
+<!--            <inertia-->
+<!--                        ixx="4.000000E-09"-->
+<!--                        ixy="0.000000E+00"-->
+<!--                        ixz="0.000000E+00"-->
+<!--                        iyy="4.000000E-09"-->
+<!--                        iyz="0.000000E+00"-->
+<!--                        izz="4.000000E-09"/>-->
+<!--        </inertial>-->
+<!--        <visual>-->
+<!--            <origin xyz="0 0 0" rpy="0 0 0"/>-->
+
+<!--            <geometry>-->
+<!--              <sphere radius="0.001"/>-->
+<!--            </geometry>-->
+
+<!--            <material name="blue">-->
+<!--              <color rgba="0.0 0.0 1.0 1.0"/>-->
+<!--            </material>-->
+<!--      </visual>-->
+<!--    </link>-->
+
+<!--    <joint name="left_hand_contact" type="revolute">-->
+<!--        <limit lower="0" upper="0." effort="100" velocity="1.0"/>-->
+<!--        <origin xyz="-0.325 -0.43 0" rpy="0 0 0"/>-->
+<!--&lt;!&ndash;        <origin xyz="-0.325 -0.75 0" rpy="0 0 0"/>&ndash;&gt;-->
+<!--&lt;!&ndash;        <origin xyz="-0.325 -0.73 0" rpy="0 0 0"/>&ndash;&gt;-->
+<!--        <parent-->
+<!--                link="base_link"/>-->
+<!--        <child-->
+<!--                link="left_hand"/>-->
+<!--        <axis-->
+<!--                xyz="0 0 1"/>-->
+<!--    </joint>-->
+
+<!--    <joint name="right_hand_contact" type="revolute">-->
+<!--        <limit lower="0" upper="0." effort="100" velocity="1.0"/>-->
+<!--        <origin xyz="0.325 -0.43 0" rpy="0 0 0"/>-->
+<!--&lt;!&ndash;        <origin xyz="0.325 -0.75 0" rpy="0 0 0"/>&ndash;&gt;-->
+<!--&lt;!&ndash;        <origin xyz="0.325 -0.73 0" rpy="0 0 0"/>&ndash;&gt;-->
+<!--        <parent-->
+<!--                link="base_link"/>-->
+<!--        <child-->
+<!--                link="right_hand"/>-->
+<!--        <axis-->
+<!--                xyz="0 0 1"/>-->
+<!--    </joint>-->
+
+    <link name="base_link">
+        <inertial>
+            <origin xyz="0 -0.425 0" rpy="0 0 0"/>
+<!--            <origin xyz="5.57980384847987E-07 -0.95 2.85008639621007E-07" rpy="0 0 0"/>-->
+<!--            <mass value="1.60235626896938"/>-->
+
+<!--            <mass value="0.1"/>-->
+<!--            <inertia-->
+<!--                    ixx="0.23"-->
+<!--                    ixy="1.45539870892311E-08"-->
+<!--                    ixz="2.64829864005487E-09"-->
+<!--                    iyy="0.19"-->
+<!--                    iyz="-3.01571014350034E-09"-->
+<!--                    izz="0.422"/>-->
+
+<!--        <mass value="2.5"/>-->
+<!--        <inertia-->
+<!--                ixx="0.580"-->
+<!--                ixy="0.0"-->
+<!--                ixz="0.0"-->
+<!--                iyy="0.475"-->
+<!--                iyz="0.0"-->
+<!--                izz="1.055"/>-->
+
+<!--            <mass value="3.0"/>-->
+<!--        <inertia-->
+<!--                ixx="0.696"-->
+<!--                ixy="0.0"-->
+<!--                ixz="0.0"-->
+<!--                iyy="0.570"-->
+<!--                iyz="0.0"-->
+<!--                izz="1.266"/>-->
+
+<!--            <mass value="4.0"/>-->
+<!--        <inertia-->
+<!--                ixx="0.928"-->
+<!--                ixy="0.0"-->
+<!--                ixz="0.0"-->
+<!--                iyy="0.760"-->
+<!--                iyz="0.0"-->
+<!--                izz="1.688"/>-->
+
+<!--    <mass value="5.0"/>-->
+<!--        <inertia-->
+<!--                ixx="1.160"-->
+<!--                ixy="0.0"-->
+<!--                ixz="0.0"-->
+<!--                iyy="0.950"-->
+<!--                iyz="0.0"-->
+<!--                izz="2.110"/>-->
+
+<!--            <mass value="7.5"/>-->
+<!--        <inertia-->
+<!--                ixx="1.740"-->
+<!--                ixy="0.0"-->
+<!--                ixz="0.0"-->
+<!--                iyy="1.425"-->
+<!--                iyz="0.0"-->
+<!--                izz="3.165"/>-->
+
+<!--            <mass value="10.0"/>-->
+<!--        <inertia-->
+<!--                ixx="2.320"-->
+<!--                ixy="0.0"-->
+<!--                ixz="0.0"-->
+<!--                iyy="1.900"-->
+<!--                iyz="0.0"-->
+<!--                izz="4.220"/>-->
+
+            <mass value="15.0"/>
+            <inertia
+                    ixx="3.48"
+                    ixy="0.0"
+                    ixz="0.0"
+                    iyy="2.85"
+                    iyz="0.0"
+                    izz="6.33"/>
+
+                </inertial>
+
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh
+                        filename="meshes/h_frame_base_link.STL"/>
+            </geometry>
+            <material name="">
+                <color rgba="0.745098039215686 0.737254901960784 0.729411764705882 1"/>
+            </material>
+        </visual>
+
+<!--            <collision>-->
+<!--            <origin xyz="0 0 0" rpy="0 0 0"/>-->
+<!--            <geometry>-->
+<!--                <mesh filename="meshes/h_frame_base_link.STL"/>-->
+<!--            </geometry>-->
+<!--        </collision>-->
+
+        <!-- inner column-->
+        <collision>
+            <origin xyz="0.325 -0.4 0" rpy="-1.57 0 0"/>
+            <geometry>
+                <cylinder radius="0.015" length="1"/>
+<!--                <cylinder radius="0.02" length="1"/>-->
+            </geometry>
+        </collision>
+        <collision>
+            <origin xyz="-0.325 -0.4 0" rpy="-1.57 0 0"/>
+            <geometry>
+                <cylinder radius="0.015" length="1"/>
+<!--                <cylinder radius="0.02" length="1"/>-->
+            </geometry>
+        </collision>
+
+        <!-- outer column-->
+        <collision>
+            <origin xyz="0.455 -0.59 0" rpy="-1.57 0 0"/>
+            <geometry>
+                <cylinder radius="0.02" length="1.8"/>
+            </geometry>
+        </collision>
+        <collision>
+            <origin xyz="-0.455 -0.59 0" rpy="-1.57 0 0"/>
+            <geometry>
+                <cylinder radius="0.02" length="1.8"/>
+            </geometry>
+        </collision>
+
+        <!-- beam -->
+        <collision>
+            <origin xyz="0.39 -0.615 0" rpy="0 -1.57 0"/>
+            <geometry>
+                <cylinder radius="0.015" length="0.12"/>
+            </geometry>
+        </collision>
+        <collision>
+            <origin xyz="-0.39 -0.615 0" rpy="0 -1.57 0"/>
+            <geometry>
+                <cylinder radius="0.015" length="0.12"/>
+            </geometry>
+        </collision>
+
+        <collision>
+            <origin xyz="0.39 -0.215 0" rpy="0 -1.57 0"/>
+            <geometry>
+                <cylinder radius="0.015" length="0.12"/>
+            </geometry>
+        </collision>
+
+        <collision>
+            <origin xyz="-0.39 -0.215 0" rpy="0 -1.57 0"/>
+            <geometry>
+                <cylinder radius="0.015" length="0.12"/>
+            </geometry>
+        </collision>
+
+        <!-- bases for standing -->
+        <collision>
+            <origin xyz="0.46 -1.515 0"/>
+            <geometry>
+                <box size="0.015 0.01 0.015"/>
+            </geometry>
+        </collision>
+        <collision>
+            <origin xyz="-0.46 -1.515 0"/>
+            <geometry>
+                <box size="0.015 0.01 0.015"/>
+            </geometry>
+        </collision>
+    </link>
+
+</robot>

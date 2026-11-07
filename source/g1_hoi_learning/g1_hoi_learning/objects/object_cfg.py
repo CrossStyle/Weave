@@ -1,7 +1,9 @@
 import isaaclab.sim as sim_utils
 from isaaclab.assets.rigid_object import RigidObjectCfg
-
+from isaaclab.assets import Articulation, ArticulationCfg
 from g1_hoi_learning.objects import *
+from isaaclab.actuators import IdealPDActuatorCfg
+
 
 _COMMON_RIGID_PROPS = sim_utils.RigidBodyPropertiesCfg(
     disable_gravity=False,
@@ -15,7 +17,10 @@ _COMMON_RIGID_PROPS = sim_utils.RigidBodyPropertiesCfg(
     solver_velocity_iteration_count=1,
 )
 
-_COMMON_MASS_PROPS = sim_utils.MassPropertiesCfg(density=200.0)
+_COMMON_MASS_PROPS = sim_utils.MassPropertiesCfg(
+    mass=1.0,
+    # density=200.0
+)
 
 _COMMON_VISUAL_MATERIAL = sim_utils.PreviewSurfaceCfg(
     diffuse_color=(0.85, 0.45, 0.20),   # warm orange
@@ -55,6 +60,8 @@ TRASHCAN_CFG = _object_cfg(TRASHCAN_USD_PATH)
 TRIPOD_CFG = _object_cfg(TRIPOD_USD_PATH)
 WHITECHAIR_CFG = _object_cfg(WHITECHAIR_USD_PATH)
 WOODCHAIR_CFG = _object_cfg(WOODCHAIR_USD_PATH)
+HFRAME_CFG = _object_cfg(HFRAME_USD_PATH)
+LADDER_CFG = _object_cfg(LADDER_USD_PATH)
 
 OBJECT_CFG_BY_NAME = {
     "clothesstand": CLOTHESSTAND_CFG,
@@ -67,4 +74,6 @@ OBJECT_CFG_BY_NAME = {
     "tripod":       TRIPOD_CFG,
     "whitechair":   WHITECHAIR_CFG,
     "woodchair":    WOODCHAIR_CFG,
+    "h_frame": HFRAME_CFG,
+    "ladder": LADDER_CFG,
 }

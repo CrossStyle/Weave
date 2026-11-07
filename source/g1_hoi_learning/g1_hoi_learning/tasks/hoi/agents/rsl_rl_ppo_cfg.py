@@ -40,6 +40,7 @@ class SimBaActorCriticCfg(RslRlPpoActorCriticCfg):
         "ref_motion_body": {"type": "mlp", "hidden_dims": [512, 256]},
         "ref_motion_object": {"type": "mlp", "hidden_dims": [256]},
         "object_state": {"type": "mlp", "hidden_dims": [256]},
+        "object_state_actor": {"type": "mlp", "hidden_dims": [256]},
         "robot_proprio": {"type": "mlp", "hidden_dims": [256]},
         "robot_privileged": {"type": "mlp", "hidden_dims": [256]},
     }
@@ -53,6 +54,7 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     experiment_name = "g1_inspire_hoi"
     obs_groups: dict = {
         "policy": ["ref_motion_body", "ref_motion_object", "object_state", "robot_proprio"],
+        # "policy": ["ref_motion_body", "ref_motion_object", "object_state_actor", "robot_proprio"],
         "critic": ["ref_motion_body", "ref_motion_object", "object_state", "robot_privileged"],
     }
     policy = SimBaActorCriticCfg(

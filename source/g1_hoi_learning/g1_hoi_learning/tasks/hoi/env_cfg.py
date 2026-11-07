@@ -192,6 +192,16 @@ class ObservationsCfg:
             self.concatenate_terms = True
 
     @configclass
+    class ObjectStateActorCfg(ObsGroup):
+        """Live object pose/shape features without measured contact."""
+
+        object_pos_b = ObsTerm(func=mdp.object_pos_b, params={"command_name": "motion"})
+        object_rot_b = ObsTerm(func=mdp.object_rot_b, params={"command_name": "motion"})
+
+        def __post_init__(self):
+            self.concatenate_terms = True
+
+    @configclass
     class RobotProprioCfg(ObsGroup):
         """Deployable proprioception.
         """
@@ -228,6 +238,7 @@ class ObservationsCfg:
     ref_motion_body: RefMotionBodyCfg = RefMotionBodyCfg()
     ref_motion_object: RefMotionObjectCfg = RefMotionObjectCfg()
     object_state: ObjectStateCfg = ObjectStateCfg()
+    object_state_actor: ObjectStateActorCfg = ObjectStateActorCfg()
     robot_proprio: RobotProprioCfg = RobotProprioCfg()
     robot_privileged: RobotPrivilegedCfg = RobotPrivilegedCfg()
 
@@ -357,6 +368,17 @@ class RewardsCfg:
             ],
         },
     )
+
+    hand_obj_rel_pos = RewTerm(
+        func=mdp.motion_hand_obj_relative_pos_error_exp,
+        weight=1.0,
+        params={
+            "command_name": "motion",
+            "hand_body_names": [".*_thumb_distal", ".*_(index|middle|ring|pinky)_intermediate"],
+            "std": 0.05,
+        },
+    )
+
     # contact
     contact = RewTerm(
         func=mdp.contact_reward,
@@ -461,9 +483,17 @@ class G1HoiLearningEnvCfg(ManagerBasedRLEnvCfg):
         """Post initialization."""
         self.decimation = 4
         self.episode_length_s = 20.0
-        self.viewer.eye = (-3.0, -3.0, 2.0)
-        self.viewer.origin_type = "asset_root"
-        self.viewer.asset_name = "robot"
+        self.viewer.eye = (-3.0, 1.0, 2.0)
+        # self.viewer.origin_type = "asset_root"
+        # self.viewer.asset_name = "robot"
+        self.viewer.origin_type = "world"  # 原来是 "asset_root"
+        self.viewer.asset_name = None  # 原来是 "robot"，world模式不需要
         self.sim.dt = 1 / 200
         self.sim.render_interval = self.decimation
-        self.sim.physx.gpu_max_rigid_patch_count = 16 * 2**16
+        # self.sim.physx.gpu_max_rigid_patch_count = 16 * 2**16
+        self.sim.physx.gpu_collision_stack_size = 2 ** 28  # 256MB，单位是字节，治你这个报错
+        self.sim.physx.gpu_max_rigid_contact_count = 2 ** 23  # 8M个接触点
+        self.sim.physx.gpu_max_rigid_patch_count = 2 ** 23  # 8M个patch
+        self.sim.physx.gpu_found_lost_pairs_capacity = 2 ** 23
+        self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 2 ** 23
+        self.sim.physx.gpu_total_aggregate_pairs_capacity = 2 ** 21

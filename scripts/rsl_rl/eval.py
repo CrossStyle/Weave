@@ -10,7 +10,7 @@
 
 import argparse
 import sys
-
+import torch  # noqa: F401
 from isaaclab.app import AppLauncher
 
 # local imports
@@ -31,12 +31,19 @@ parser.add_argument(
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment")
 parser.add_argument("--real-time", action="store_true", default=False, help="Run in real-time, if possible.")
 parser.add_argument("--output_dir", type=str, default=None, help="Where to write metrics.json. Defaults to <run>/eval.")
+parser.add_argument(
+    "--video", action="store_true", default=False,
+    help="After eval, save a video of one successful rollout (a random one if all failed).",
+)
 # append RSL-RL cli arguments
 cli_args.add_rsl_rl_args(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 # parse the arguments
 args_cli, hydra_args = parser.parse_known_args()
+# always enable cameras to record video
+if args_cli.video:
+    args_cli.enable_cameras = True
 
 # clear out sys.argv for Hydra
 sys.argv = [sys.argv[0]] + hydra_args
@@ -49,6 +56,7 @@ simulation_app = app_launcher.app
 
 import json
 import os
+import re
 import time
 
 import gymnasium as gym
@@ -56,6 +64,8 @@ import torch
 import numpy as np
 from rsl_rl.runners import OnPolicyRunner
 from tqdm import tqdm
+
+from isaacsim.core.simulation_manager import SimulationManager
 
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg, multi_agent_to_single_agent
 from isaaclab.managers import TerminationTermCfg as DoneTerm
@@ -173,19 +183,84 @@ class ClipEvaluator:
         }
 
 
+class RolloutRecorder:
+    """Stores every env's root/joint poses each step so one rollout can be replayed and filmed after eval."""
+
+    def __init__(self, env: RslRlVecEnvWrapper, max_steps: int):
+        self.env = env.unwrapped
+        self.scene = self.env.scene
+        n, dev = self.env.num_envs, self.env.device
+        self.root_poses = {
+            name: torch.zeros(max_steps, n, 7, device=dev)
+            for name in [*self.scene.articulations, *self.scene.rigid_objects]
+        }
+        self.joint_pos = {
+            name: torch.zeros(max_steps, n, self.scene[name].num_joints, device=dev)
+            for name in self.scene.articulations
+        }
+        self.t = 0
+
+    def record(self) -> None:
+        """Call before each env.step(); frame t then holds the state the policy acted on at step t."""
+        for name, buf in self.root_poses.items():
+            buf[self.t] = self.scene[name].data.root_pose_w
+        for name, buf in self.joint_pos.items():
+            buf[self.t] = self.scene[name].data.joint_pos
+        self.t += 1
+
+    def save_video(self, env_id: int, num_frames: torch.Tensor, path: str, warmup: int = 30) -> None:
+        """Kinematically replay all envs (each frozen on its last valid frame) and film them; no physics step."""
+        from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
+
+        last = (num_frames.to(self.env.device).clamp(max=self.t) - 1).clamp(min=0)
+        env_ids = torch.arange(self.env.num_envs, device=self.env.device)
+        frames = []
+        with torch.inference_mode():
+            for t in range(int(last[env_id]) + 1):
+                idx = last.clamp(max=t)
+                for name, buf in self.root_poses.items():
+                    self.scene[name].write_root_pose_to_sim(buf[idx, env_ids])
+                for name, buf in self.joint_pos.items():
+                    self.scene[name].write_joint_position_to_sim(buf[idx, env_ids])
+                if t == 0:
+                    # headless eval never rendered, so textures/shaders are still loading at this point
+                    while SimulationManager.assets_loading():
+                        self.env.sim.render()
+                    for _ in range(warmup):
+                        self.env.render()
+                frames.append(self.env.render().copy())
+        if frames[0].std() < 1.0 and frames[-1].std() < 1.0:
+            print("[WARN] Recorded frames look uniform; the camera may not see the scene or the renderer is not ready.")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        ImageSequenceClip(frames, fps=1.0 / self.env.step_dt).write_videofile(path, logger=None)
+
+
+def focus_camera(env: RslRlVecEnvWrapper, env_id: int) -> None:
+    """Point the viewport camera at env ``env_id`` (keeps asset tracking if the viewer follows an asset)."""
+    controller = env.unwrapped.viewport_camera_controller
+    if controller is None:
+        return
+    controller.set_view_env_index(env_id)
+    if controller.cfg.origin_type == "world":
+        controller.update_view_to_env()
+
+
 def print_report(res: dict) -> None:
     """Aggregate summary only; per-clip rows live in metrics.json."""
     keys = res["metric_keys"]
     width = max(len(k) for k in keys)
     n_ok = sum(c["success"] for c in res["clips"])
-    print(f"\n===== CLIP-WISE EVALUATION  ({res['num_clips']} clips) =====")
-    print(f"success_rate : {res['success_rate']:.4f}  ({n_ok}/{res['num_clips']})")
+    n_total = res["num_clips"]
+    print(f"\n===== CLIP-WISE EVALUATION  ({n_total} clips) =====")
+    print(f"success_rate : {res['success_rate']:.4f}  ({n_ok}/{n_total})")
     print(f"progress_rate: {res['progress_rate']:.4f}")
     print(f"{'metric':<{width}}  {'all':>10}  {'success':>10}")
     for k in keys:
         print(f"{k:<{width}}  {res['metrics_all'][k]:>10.4f}  {res['metrics_success'][k]:>10.4f}")
     if res["failures"]:
-        print("failures     : " + "  ".join(f"{k}={v}" for k, v in sorted(res["failures"].items(), key=lambda x: -x[1])))
+        fail_total = sum(res["failures"].values())
+        fail_strs = [f"{k}={v}({100*v//fail_total}%)" for k, v in sorted(res["failures"].items(), key=lambda x: -x[1])]
+        print("failures     : " + "  ".join(fail_strs))
     print()
 
 
@@ -210,7 +285,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     log_dir = os.path.dirname(resume_path)
     env_cfg.log_dir = log_dir
 
-    env = gym.make(args_cli.task, cfg=env_cfg)
+    env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
     if isinstance(env.unwrapped, DirectMARLEnv):
         env = multi_agent_to_single_agent(env)
     env = RslRlVecEnvWrapper(env, clip_actions=agent_cfg.clip_actions)
@@ -227,6 +302,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     obs, _ = env.reset()
     policy_nn.reset()
     evaluator = ClipEvaluator(env, read_motion_clip_names(env_cfg.commands.motion.motion_files))
+    recorder = RolloutRecorder(env, evaluator.max_steps) if args_cli.video else None
 
     pbar = tqdm(range(evaluator.max_steps), desc="eval", unit="step", dynamic_ncols=True)
     for _ in pbar:
@@ -235,6 +311,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             break
         start_time = time.time()
         with torch.inference_mode():
+            if recorder is not None:
+                recorder.record()
             evaluator.collect()
             actions = policy(obs)
             obs, _, dones, extras = env.step(actions)
@@ -263,6 +341,21 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     with open(out_file, "w") as f:
         json.dump(res, f, indent=2)
     print(f"[INFO] Wrote {out_file}")
+
+    if recorder is not None and simulation_app.is_running():
+        ok_ids = evaluator.success.nonzero(as_tuple=False).flatten().tolist()
+        pool = ok_ids if ok_ids else list(range(env.num_envs))
+        env_id = int(np.random.default_rng(agent_cfg.seed).choice(pool))
+        clip = res["clips"][env_id]
+        tag = "success" if clip["success"] else f"fail_{clip['cause']}"
+        if not ok_ids:
+            print("[WARN] No successful rollout; recording a random one instead.")
+        name = re.sub(r"[^\w.-]+", "_", clip["name"])
+        video_path = os.path.join(output_dir, "videos", f"env{env_id:04d}_{name}_{tag}.mp4")
+        print(f"[INFO] Recording env {env_id} (clip '{clip['name']}', {tag}, {clip['steps']} steps) ...")
+        focus_camera(env, env_id)
+        recorder.save_video(env_id, evaluator.steps, video_path)
+        print(f"[INFO] Wrote {video_path}")
 
     env.close()
 

@@ -412,6 +412,14 @@ class MotionCommand(CommandTerm):
     # ------------------------------------------------------------------- CommandTerm interface
 
     def reset(self, env_ids: Sequence[int] | None = None) -> dict[str, float]:
+        # 修复 inference_mode 导致的 metrics 张量只读问题
+        # RSL-RL 的训练循环在 inference_mode 中执行，导致 metrics 被标记为 inference tensor
+        # 我们需要在父类 reset() 之前将它们替换为普通张量
+        for key, value in self.metrics.items():
+            if isinstance(value, torch.Tensor) and value.is_inference():
+                # 克隆为普通张量，替换原来的 inference tensor
+                self.metrics[key] = value.clone()
+        
         extras = super().reset(env_ids)
         self._refresh_caches()
         return extras

@@ -1,0 +1,13 @@
+===== CLIP-WISE EVALUATION  (10kg 165 clips) =====
+success_rate : 0.0667  (11/165)
+progress_rate: 0.6769
+metric                   all     success
+error_anchor_pos      0.0529      0.0648
+error_anchor_rot      0.0636      0.0677
+error_body_pos        0.0813      0.1006
+error_body_rot        0.2616      0.3523
+error_joint_pos       2.8904      3.1574
+error_joint_vel      11.2208     11.3607
+error_object_pos      0.0673      0.0889
+error_object_rot      0.1537      0.3160
+failures     : object_pos=99  object_ori=35  anchor_pos=18  bad_contact=2

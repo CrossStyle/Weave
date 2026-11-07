@@ -126,8 +126,11 @@ class bad_contact(ManagerTermBase):
         any_expected = (ref_label > 0).any(dim=-1)  # (num_envs,)
 
         # Sim: does any hand body have object contact?
-        forces = sensor.data.force_matrix_w[:, 0, self.hand_idx, :]  # (num_envs, num_hand, 3)
-        any_contact = (forces.norm(dim=-1) > threshold).any(dim=-1)  # (num_envs,)
+        if sensor.data.force_matrix_w is None or sensor.data.force_matrix_w.shape[1] == 0:
+            any_contact = torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+        else:
+            forces = sensor.data.force_matrix_w[:, 0, self.hand_idx, :]  # (num_envs, num_hand, 3)
+            any_contact = (forces.norm(dim=-1) > threshold).any(dim=-1)  # (num_envs,)
 
         # Increment if expected but no contact, reset otherwise
         lost = any_expected & ~any_contact

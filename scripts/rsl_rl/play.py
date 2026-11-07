@@ -71,7 +71,8 @@ from isaaclab.utils.assets import retrieve_file_path
 from isaaclab.utils.dict import print_dict
 
 from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper, export_policy_as_jit, export_policy_as_onnx
-from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
+# from isaaclab_rl.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
+from isaaclab.utils.pretrained_checkpoint import get_published_pretrained_checkpoint
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
@@ -115,7 +116,14 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     # set the log directory for the environment (works for all environment types)
     env_cfg.log_dir = log_dir
 
+    # force disable eval_mode for play with rsi
+    # if hasattr(env_cfg, 'commands') and hasattr(env_cfg.commands, 'motion'):
+    #     env_cfg.commands.motion.eval_mode = False
+    #     print(f"[INFO] Forcing eval_mode=False for play with rsi")
+
     # create isaac environment
+    # env_cfg.scene.robot.spawn.merge_fixed_joints = True
+    # env_cfg.scene.robot.spawn.force_usd_conversion = True
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
 
     # convert to single-agent instance if required by the RL algorithm
@@ -166,8 +174,18 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     dt = env.unwrapped.step_dt
 
-    # reset environment
-    obs = env.get_observations()
+    # check motion command rsi configuration
+    motion_cmd = env.unwrapped.command_manager.get_term("motion")
+    print(f"[DEBUG] Motion command rsi setting: {motion_cmd.cfg.rsi}")
+    print(f"[DEBUG] Motion command eval_mode: {motion_cmd.cfg.eval_mode}")
+    print(f"[DEBUG] Initial time_steps before reset: {motion_cmd.time_steps[:min(5, len(motion_cmd.time_steps))]}")
+
+    # reset environment (triggers motion command resampling with rsi)
+    obs, _ = env.reset()
+    
+    print(f"[DEBUG] Time_steps after reset: {motion_cmd.time_steps[:min(5, len(motion_cmd.time_steps))]}")
+    print(f"[DEBUG] Env_clip after reset: {motion_cmd.env_clip[:min(5, len(motion_cmd.env_clip))]}")
+    
     timestep = 0
     # --- termination-cause statistics (printed each time an episode ends) ---
     term_mgr = env.unwrapped.termination_manager

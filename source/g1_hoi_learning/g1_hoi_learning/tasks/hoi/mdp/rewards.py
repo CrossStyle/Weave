@@ -180,8 +180,12 @@ class contact_reward(ManagerTermBase):
         sensor = env.scene[sensor_name]
 
         ref_label = command.ref_contact_label[:, self.hand_idx]              # (num_envs, num_hand)
-        forces = sensor.data.force_matrix_w[:, 0, self.hand_idx, :]           # (num_envs, num_hand, 3)
-        sim_strength = (forces.norm(dim=-1) / saturate_force).clamp(0, 1)     # (num_envs, num_hand)
+        
+        if sensor.data.force_matrix_w is None or sensor.data.force_matrix_w.shape[1] == 0:
+            sim_strength = torch.zeros_like(ref_label)
+        else:
+            forces = sensor.data.force_matrix_w[:, 0, self.hand_idx, :]           # (num_envs, num_hand, 3)
+            sim_strength = (forces.norm(dim=-1) / saturate_force).clamp(0, 1)     # (num_envs, num_hand)
 
         target = (ref_label > 0).float()
         mask = (ref_label != 0).float()
