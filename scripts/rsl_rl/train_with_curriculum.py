@@ -40,7 +40,7 @@ parser.add_argument(
 )
 # 课程学习相关参数
 parser.add_argument("--curriculum", action="store_true", default=False, help="Enable mass curriculum learning.")
-parser.add_argument("--initial_mass", type=float, default=1.0, help="Initial object mass (kg).")
+parser.add_argument("--initial_mass", type=float, default=20.0, help="Initial object mass (kg).")
 parser.add_argument("--final_mass", type=float, default=20.0, help="Final object mass (kg).")
 parser.add_argument("--mass_increment", type=float, default=1.0, help="Mass increment per stage (kg).")
 parser.add_argument("--eval_interval", type=int, default=100, help="Curriculum evaluation interval (iterations).")

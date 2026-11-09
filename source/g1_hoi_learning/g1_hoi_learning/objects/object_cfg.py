@@ -18,7 +18,7 @@ _COMMON_RIGID_PROPS = sim_utils.RigidBodyPropertiesCfg(
 )
 
 _COMMON_MASS_PROPS = sim_utils.MassPropertiesCfg(
-    mass=1.0,
+    mass=20.0,
     # density=200.0
 )
 
