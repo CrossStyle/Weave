@@ -53,8 +53,7 @@ class PPORunnerCfg(RslRlOnPolicyRunnerCfg):
     save_interval = 100
     experiment_name = "g1_inspire_hoi"
     obs_groups: dict = {
-        "policy": ["ref_motion_body", "ref_motion_object", "object_state", "robot_proprio"],
-        # "policy": ["ref_motion_body", "ref_motion_object", "object_state_actor", "robot_proprio"],
+        "policy": ["ref_motion_body", "ref_motion_object", "object_state_actor", "robot_proprio"],
         "critic": ["ref_motion_body", "ref_motion_object", "object_state", "robot_privileged"],
     }
     policy = SimBaActorCriticCfg(

@@ -1,0 +1,36 @@
+# @package _global_
+#
+# Real-world deployment training config
+# Trains policy with observations available on real robot
+#
+# Usage:
+#   python scripts/rsl_rl/train.py --task=G1-Inspire-HOI-v0 --headless \
+#       --config-dir ./configs/track --config-name train_real_world
+
+defaults:
+  - train
+  - _self_
+
+# Relax terminations slightly due to noisy actor observations (±3cm, ±8.6°)
+env:
+  terminations:
+    # Slightly more tolerant to accommodate pose estimation noise
+    object_pos: { params: { command_name: motion, threshold: 0.4 } }  # increased from 0.3
+    object_ori: { params: { command_name: motion, threshold: 0.4 } }  # increased from 0.3
+    bad_contact:
+      params:
+        command_name: motion
+        sensor_name: contact_sensor
+        hand_body_names: [".*_thumb_intermediate", ".*_thumb_distal", ".*_index_intermediate", ".*_middle_intermediate", ".*_ring_intermediate", ".*_pinky_intermediate"]
+        max_lost_frames: 15  # slightly more tolerant (was 10)
+
+# Training notes:
+# - Actor uses: robot_proprio + object_state_actor (pose w/ ±3cm noise + object_id) + ref_motion_*
+#   * Noise simulates real-world 6D pose estimation errors
+#   * Actor does NOT observe: contact, BPS-SDF, object_nearest_point_b
+# - Critic uses: robot_privileged (GT states) + object_state (BPS-SDF + contact)
+# - ALL rewards/terminations are kept (contact, hand_obj_rel_pos, etc.)
+#   * They use full simulation state - only computed during training
+#   * Not needed during real-world deployment (policy is feedforward)
+# - The object_id one-hot enables multi-object training without geometric features
+

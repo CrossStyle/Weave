@@ -193,12 +193,24 @@ class ObservationsCfg:
 
     @configclass
     class ObjectStateActorCfg(ObsGroup):
-        """Live object pose/shape features without measured contact."""
+        """Live object pose/shape features without measured contact.
+        With noise to simulate vision-based 6D pose estimation errors for real-world deployment.
+        """
 
-        object_pos_b = ObsTerm(func=mdp.object_pos_b, params={"command_name": "motion"})
-        object_rot_b = ObsTerm(func=mdp.object_rot_b, params={"command_name": "motion"})
+        object_pos_b = ObsTerm(
+            func=mdp.object_pos_b, 
+            params={"command_name": "motion"},
+            noise=Unoise(n_min=-0.03, n_max=0.03)  # ±3cm position noise
+        )
+        object_rot_b = ObsTerm(
+            func=mdp.object_rot_b, 
+            params={"command_name": "motion"},
+            noise=Unoise(n_min=-0.15, n_max=0.15)  # rotation noise (~8.6°)
+        )
+        object_id = ObsTerm(func=mdp.object_id_onehot, params={"command_name": "motion"})
 
         def __post_init__(self):
+            self.enable_corruption = True  # Enable noise
             self.concatenate_terms = True
 
     @configclass
@@ -230,6 +242,11 @@ class ObservationsCfg:
         base_lin_vel = ObsTerm(func=mdp.base_lin_vel)
         body_pos = ObsTerm(func=mdp.robot_body_pos_b, params={"command_name": "motion"})
         body_ori = ObsTerm(func=mdp.robot_body_ori_b, params={"command_name": "motion"})
+        
+        # Ground-truth object state (for critic during real-world training)
+        object_pos_gt = ObsTerm(func=mdp.object_pos_b, params={"command_name": "motion"})
+        object_rot_gt = ObsTerm(func=mdp.object_rot_b, params={"command_name": "motion"})
+        object_mass = ObsTerm(func=mdp.object_mass, params={"object_name": "object"})
 
         def __post_init__(self):
             self.enable_corruption = False
@@ -320,6 +337,21 @@ class EventCfg:
           },
       },
   )
+    
+    # 重置额外场景物体（墙、梯子支撑等）
+    reset_conditional_objects = EventTerm(
+        func=mdp.reset_conditional_scene_objects,
+        mode="reset",
+        params={
+            "object_names": [],  # 将在 __post_init__ 中设置
+            "h_frame_wall1_cfg": SceneEntityCfg("h_frame_wall1"),
+            "h_frame_wall2_cfg": SceneEntityCfg("h_frame_wall2"),
+            "ladder_support1_cfg": SceneEntityCfg("ladder_support1"),
+            "ladder_support2_cfg": SceneEntityCfg("ladder_support2"),
+            "ladder_support3_cfg": SceneEntityCfg("ladder_support3"),
+            "ladder_support4_cfg": SceneEntityCfg("ladder_support4"),
+        },
+    )
 
 @configclass
 class RewardsCfg:
@@ -497,3 +529,10 @@ class G1HoiLearningEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.physx.gpu_found_lost_pairs_capacity = 2 ** 23
         self.sim.physx.gpu_found_lost_aggregate_pairs_capacity = 2 ** 23
         self.sim.physx.gpu_total_aggregate_pairs_capacity = 2 ** 21
+        
+        # 设置事件函数的 object_names 参数（如果 cfg 中存储了 object_names）
+        if hasattr(self, '_object_names'):
+            self.events.reset_conditional_objects.params["object_names"] = self._object_names
+            print(f"[DEBUG] Set object_names in event config: {self._object_names}")
+        else:
+            print(f"[DEBUG] _object_names not found in __post_init__")

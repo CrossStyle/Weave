@@ -15,6 +15,8 @@ Memory layout::
 Each env owns a fixed object (``env_object``) and plays one clip of that object at a time
 (``env_clip``, re-sampled every episode). 
 Frame access is via ``buffer[clip_starts[env_clip] + time_steps]``.
+
+Object IDs are managed by a global registry to ensure consistency across training/eval.
 """
 
 import os
@@ -35,6 +37,7 @@ from isaaclab.utils.math import (
 )
 
 from g1_hoi_learning.objects import ASSET_DIR
+from g1_hoi_learning.tasks.hoi.object_registry import get_object_id, get_num_objects
 
 
 # ----------------------------------------------------------------------- TensorClass
@@ -98,10 +101,21 @@ class MotionLoader:
         sum_T = int(self.clip_starts[-1].item())
 
         # ----- objects: unique names (stable order) + clip->object map + per-object clip table -----
+        # Collect object names from motion data
         self.object_names = list(dict.fromkeys(clip_obj_names))                                 # (O,) first-seen
+        
+        # Map object names to global registry IDs
+        self.object_name_to_id = {name: get_object_id(name) for name in self.object_names}
+        self.object_ids = [self.object_name_to_id[name] for name in self.object_names]
+        
+        # For backward compatibility: local indices (0, 1, 2, ...) for clips
         self.num_objects = len(self.object_names)
-        oid = {name: i for i, name in enumerate(self.object_names)}
-        self.clip_object = torch.tensor([oid[n] for n in clip_obj_names], dtype=torch.long, device=device)  # (M,)
+        oid_local = {name: i for i, name in enumerate(self.object_names)}
+        self.clip_object = torch.tensor([oid_local[n] for n in clip_obj_names], dtype=torch.long, device=device)  # (M,)
+        
+        # Global object IDs (from registry) for each clip
+        self.clip_object_global_id = torch.tensor([self.object_name_to_id[n] for n in clip_obj_names], dtype=torch.long, device=device)
+        
         self.object_nclips = torch.bincount(self.clip_object, minlength=self.num_objects)       # (O,)
         c_max = int(self.object_nclips.max())
         self._clips_by_object = torch.zeros((self.num_objects, c_max), dtype=torch.long, device=device)

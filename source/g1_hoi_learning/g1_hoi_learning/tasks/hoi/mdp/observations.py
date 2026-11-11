@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import torch
 
+from isaaclab.assets import RigidObject
 from isaaclab.envs import ManagerBasedEnv
 from isaaclab.managers import ManagerTermBase
 from isaaclab.utils.math import (
@@ -290,3 +291,79 @@ def contact(env: ManagerBasedEnv, sensor_name: str, threshold: float = 1.0) -> t
         return torch.zeros(env.num_envs, num_filters, device=sensor.device)
     forces = sensor.data.force_matrix_w[:, 0, :, :]  # (num_envs, num_filters, 3)
     return (forces.norm(dim=-1) > threshold).float()
+
+
+# -- Object ID embedding --
+from g1_hoi_learning.tasks.hoi.object_registry import get_num_objects
+import torch.nn.functional as F
+
+
+# def object_id_onehot(env: ManagerBasedEnv, command_name: str) -> torch.Tensor:
+#     """One-hot encoding of the object ID for each environment. (num_envs, NUM_OBJECTS_GLOBAL)
+#
+#     Uses global object registry to ensure consistent IDs across training and evaluation.
+#     """
+#     command: MotionCommand = env.command_manager.get_term(command_name)
+#     num_objects_global = get_num_objects()
+#
+#     # Get global object IDs for each environment
+#     # env_object contains local indices, need to map to global IDs
+#     global_ids = torch.tensor(
+#         [command.motion.object_ids[local_id] for local_id in command.env_object.cpu().numpy()],
+#         device=env.device,
+#         dtype=torch.long
+#     )
+#
+#     # Create one-hot encoding with global object space
+#     onehot = torch.zeros(env.num_envs, num_objects_global, device=env.device, dtype=torch.float32)
+#     onehot.scatter_(1, global_ids.unsqueeze(1), 1.0)
+#     return onehot
+def object_id_onehot(env: ManagerBasedEnv, command_name: str) -> torch.Tensor:
+    """One-hot encoding of the object ID for each environment. (num_envs, NUM_OBJECTS_GLOBAL)"""
+    command: MotionCommand = env.command_manager.get_term(command_name)
+    num_objects_global = get_num_objects()
+
+    # 1. 确保映射表在 GPU 上（建议直接在 MotionLoader 初始化时存为 GPU tensor，这里做惰性缓存兜底）
+    if not isinstance(command.motion.object_ids, torch.Tensor):
+        if not hasattr(command.motion, "_object_ids_tensor"):
+            command.motion._object_ids_tensor = torch.as_tensor(
+                command.motion.object_ids, device=env.device, dtype=torch.long
+            )
+        obj_ids_map = command.motion._object_ids_tensor
+    else:
+        obj_ids_map = command.motion.object_ids.to(device=env.device, dtype=torch.long)
+
+    # 2. 纯 GPU 向量化索引 (num_envs,)
+    global_ids = obj_ids_map[command.env_object.long()]
+
+    # 3. 直接生成 float32 的 one-hot (num_envs, num_objects_global)
+    return F.one_hot(global_ids, num_classes=num_objects_global).to(dtype=torch.float32)
+
+
+def object_id_index(env: ManagerBasedEnv, command_name: str) -> torch.Tensor:
+    """Object ID as integer index for each environment. (num_envs, 1)
+    
+    Uses global object registry to ensure consistent IDs across training and evaluation.
+    """
+    command: MotionCommand = env.command_manager.get_term(command_name)
+    
+    # Get global object IDs for each environment
+    global_ids = torch.tensor(
+        [command.motion.object_ids[local_id] for local_id in command.env_object.cpu().numpy()],
+        device=env.device,
+        dtype=torch.float32
+    )
+    
+    return global_ids.unsqueeze(1)
+
+
+def object_mass(env: ManagerBasedEnv, object_name: str = "object") -> torch.Tensor:
+    """Object mass for each environment. (num_envs, 1)"""
+    obj: RigidObject = env.scene[object_name]
+    # Get mass from the rigid body (assumes single rigid body per object)
+    # obj.root_physx_view.get_masses() returns (num_envs, num_bodies) for articulations
+    # For RigidObject, it's (num_envs,)
+    masses = obj.root_physx_view.get_masses()  # (num_envs,) or (num_envs, 1)
+    if masses.ndim == 1:
+        masses = masses.unsqueeze(1)
+    return masses.to(device=env.device, dtype=torch.float32)

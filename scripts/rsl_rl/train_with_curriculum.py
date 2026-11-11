@@ -43,10 +43,13 @@ parser.add_argument("--curriculum", action="store_true", default=False, help="En
 parser.add_argument("--initial_mass", type=float, default=20.0, help="Initial object mass (kg).")
 parser.add_argument("--final_mass", type=float, default=20.0, help="Final object mass (kg).")
 parser.add_argument("--mass_increment", type=float, default=1.0, help="Mass increment per stage (kg).")
-parser.add_argument("--eval_interval", type=int, default=100, help="Curriculum evaluation interval (iterations).")
-parser.add_argument("--eval_episodes", type=int, default=4096, help="Number of episodes per evaluation.")
+parser.add_argument("--eval_interval", type=int, default=200, help="Curriculum evaluation interval (iterations).")
+parser.add_argument("--eval_episodes", type=int, default=400, help="Number of episodes per evaluation.")  # （已废弃，使用 eval_sample_ratio）
+parser.add_argument("--eval_sample_ratio", type=float, default=0.5, help="评估时抽样比例（0.5 = 50% 环境，可加速评估）")
+parser.add_argument("--eval_early_stop_ratio", type=float, default=0.9, help="Early stopping 阈值（0.9 = 90% 环境完成就停止）")
+parser.add_argument("--eval_min_envs_per_object", type=int, default=20, help="每个物体至少评估的环境数")
 parser.add_argument("--success_threshold", type=float, default=0.8, help="Success rate threshold for promotion.")
-parser.add_argument("--min_iterations", type=int, default=100, help="Minimum iterations per curriculum stage.")
+parser.add_argument("--min_iterations", type=int, default=200, help="Minimum iterations per curriculum stage.")
 parser.add_argument("--max_failures", type=int, default=3, help="Maximum consecutive failures before rollback.")
 parser.add_argument(
     "--allow_regression",
@@ -260,6 +263,11 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             eval_interval=args_cli.eval_interval,
             eval_episodes=args_cli.eval_episodes,
             success_threshold=args_cli.success_threshold,
+
+            eval_sample_ratio=args_cli.eval_sample_ratio,
+            eval_early_stop_ratio=args_cli.eval_early_stop_ratio,
+            eval_min_envs_per_object=args_cli.eval_min_envs_per_object,
+
             min_iterations_per_stage=args_cli.min_iterations,
             max_failures=args_cli.max_failures,
             allow_regression=args_cli.allow_regression,

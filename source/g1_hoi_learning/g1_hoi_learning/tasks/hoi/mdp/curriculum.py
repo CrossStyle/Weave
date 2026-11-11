@@ -36,8 +36,13 @@ class MassCurriculumCfg:
 
     # 评估参数
     eval_interval: int = 50  # 每多少 iteration 评估一次
-    eval_episodes: int = 50  # 每次评估多少 episode
+    eval_episodes: int = 50  # 每次评估多少 episode（已废弃，使用 eval_sample_ratio）
     success_threshold: float = 0.8  # 晋升阈值
+    
+    # 评估优化参数
+    eval_sample_ratio: float = 0.1  # 评估时抽样比例（0.5 = 50% 环境，可加速评估）
+    eval_early_stop_ratio: float = 0.9  # Early stopping 阈值（0.9 = 90% 环境完成就停止）
+    eval_min_envs_per_object: int = 20  # 每个物体至少评估的环境数
 
     # 保护机制
     min_iterations_per_stage: int = 50  # 每个阶段最少训练步数
@@ -129,117 +134,198 @@ class MassCurriculumManager:
     def evaluate(self, actor_critic) -> dict:
         """评估当前策略的成功率
         
-        与 eval.py 保持完全一致的评估方式：
-        - 启用 eval_mode（固定每个环境的clip）
-        - 每个环境只评估第一个episode
-        - 正确reset policy状态
+        使用训练时的环境-物体-clip 分配，但禁用 RSI 从头开始评估。
+        支持抽样评估和 early stopping 以加速评估过程。
+        分物体统计评估结果，每个环境只评估第一个episode。
 
         Args:
             actor_critic: RSL-RL 的 ActorCritic 模块
 
         Returns:
-            dict: 包含 success_rate, progress_rate, 和详细指标
+            dict: 包含 success_rate, progress_rate, 和详细指标（整体 + 分物体）
         """
         print(f"\n[MassCurriculum] 开始评估 (iteration {self.iteration}, 质量 {self.current_mass:.1f}kg)...")
         
         n = self.env.num_envs
+        num_objects = self.command.motion.num_objects
         
-        # 保存原始配置并启用 eval_mode（与 eval.py 第 264 行一致）
-        original_eval_mode = self.command.cfg.eval_mode
-        self.command.cfg.eval_mode = True
-        
-        # 初始化 _eval_env_clip（与 commands.py 第 212 行一致）
-        if not hasattr(self.command, '_eval_env_clip'):
-            self.command._eval_env_clip = torch.arange(n, device=self.device) % self.command.motion.num_clips
-        
-        # 统计变量（每个环境只评估一次，与 eval.py ClipEvaluator 一致）
-        env_finished = torch.zeros(n, dtype=torch.bool, device=self.device)
-        env_success = torch.zeros(n, dtype=torch.bool, device=self.device)
-        env_steps = torch.zeros(n, dtype=torch.long, device=self.device)
-        
-        # Reset 环境（使用包装后的环境，obs 为 TensorDict，与 eval.py 一致）
-        obs, _ = self.vec_env.reset()
-        
-        # Reset policy 状态（与 eval.py 第 293 行一致）
-        actor_critic.reset()
-
-        # 记录每个环境的 clip 长度
-        clip_ids = self.command.env_clip.clone()
-        env_clip_len = self.command.motion.clip_lengths[clip_ids]
-        
-        # 最大步数（与 eval.py ClipEvaluator.max_steps 一致）
-        max_steps = int(env_clip_len.max().item()) + 5
-
-        step_count = 0
-        while not env_finished.all() and step_count < max_steps:
-            # 使用真实策略
-            # 注意：不使用 inference_mode，因为 env.step() 内部的 reset 需要修改 metrics 张量
-            with torch.no_grad():
-                actions = actor_critic.act_inference(obs)
+        # 抽样评估环境（分层抽样，确保每个物体都有代表）
+        if self.cfg.eval_sample_ratio < 1.0:
+            sample_size = max(
+                int(n * self.cfg.eval_sample_ratio),
+                num_objects * self.cfg.eval_min_envs_per_object
+            )
             
-            # Step environment
-            # RslRlVecEnvWrapper 返回 4 个值：(obs, rewards, dones, extras)
-            obs, rewards, dones, extras = self.vec_env.step(actions)
+            # 分层抽样：每个物体抽相同数量
+            sampled_envs = []
+            per_object_samples = sample_size // num_objects
             
-            # Reset policy 状态（与 eval.py 第 309 行一致）
-            actor_critic.reset(dones)
+            for obj_idx in range(num_objects):
+                obj_mask = (self.command.env_object == obj_idx)
+                obj_env_ids = obj_mask.nonzero().flatten()
+                if len(obj_env_ids) > per_object_samples:
+                    # 随机抽样
+                    perm = torch.randperm(len(obj_env_ids), device=self.device)[:per_object_samples]
+                    sampled_envs.append(obj_env_ids[perm])
+                else:
+                    sampled_envs.append(obj_env_ids)
             
-            # 从 extras 获取 time_outs（即 truncated）
-            time_outs = extras.get("time_outs", torch.zeros_like(dones, dtype=torch.bool))
+            eval_env_ids = torch.cat(sampled_envs).sort()[0]  # 排序方便调试
+            eval_mask = torch.zeros(n, dtype=torch.bool, device=self.device)
+            eval_mask[eval_env_ids] = True
             
-            # 反推 terminated（失败终止）= dones AND NOT time_outs
-            # 与 eval.py ClipEvaluator.update 第 133 行逻辑完全一致
-            terminated = dones.bool() & ~time_outs
+            print(f"[MassCurriculum] 抽样评估: {len(eval_env_ids)}/{n} 环境 "
+                  f"({self.cfg.eval_sample_ratio*100:.0f}%, 每物体 ~{per_object_samples})")
+        else:
+            eval_mask = torch.ones(n, dtype=torch.bool, device=self.device)
+            eval_env_ids = torch.arange(n, device=self.device)
+        
+        # 禁用 RSI，从 clip 开头评估（与 eval.py 保持一致）
+        original_rsi = self.command.cfg.rsi
+        self.command.cfg.rsi = False
+        
+        try:
+            # 统计变量（只统计被抽样的环境）
+            env_finished = torch.zeros(n, dtype=torch.bool, device=self.device)
+            env_success = torch.zeros(n, dtype=torch.bool, device=self.device)
+            env_steps = torch.zeros(n, dtype=torch.long, device=self.device)
+            
+            # Reset 环境（现在从 time_steps=0 开始，不使用 RSI）
+            obs, _ = self.vec_env.reset()
+            
+            # Reset policy 状态
+            actor_critic.reset()
 
-            # 更新步数（只统计未完成的环境，与 eval.py 一致）
-            active = ~env_finished
-            env_steps += active.long()
+            # 记录每个环境的 clip 长度和物体 ID
+            clip_ids = self.command.env_clip.clone()
+            env_clip_len = self.command.motion.clip_lengths[clip_ids]
+            env_object_ids = self.command.env_object.clone()
+            
+            # 最大步数
+            max_steps = int(env_clip_len[eval_env_ids].max().item()) + 5
 
-            # 更新统计（与 eval.py ClipEvaluator.update 完全一致）
-            newly_done = dones.bool() & ~env_finished
-
-            if newly_done.any():
-                # 获取终止条件标志
-                clip_end_flags = self.term_mgr.get_term("clip_end") if "clip_end" in self.term_mgr.active_terms else None
-
-                # 判断成功（与 eval.py 第 135 行完全一致）
-                # success = newly & clip_end & ~terminated
-                if clip_end_flags is not None:
-                    env_success |= newly_done & clip_end_flags & ~terminated
+            step_count = 0
+            while step_count < max_steps:
+                # 检查 early stopping（只检查被抽样的环境）
+                eval_finished = env_finished[eval_mask]
+                if eval_finished.all():
+                    break
                 
-                # 标记已完成的环境（每个环境只评估第一个episode）
-                env_finished |= newly_done
+                # Early stopping: 如果大部分环境已完成
+                if self.cfg.eval_early_stop_ratio < 1.0:
+                    finished_ratio = eval_finished.float().mean()
+                    if finished_ratio >= self.cfg.eval_early_stop_ratio:
+                        print(f"[MassCurriculum] Early stop: {eval_finished.sum()}/{len(eval_env_ids)} 环境完成 "
+                              f"({finished_ratio*100:.1f}% >= {self.cfg.eval_early_stop_ratio*100:.0f}%)")
+                        break
+                
+                with torch.no_grad():
+                    actions = actor_critic.act_inference(obs)
+                
+                # Step environment
+                obs, rewards, dones, extras = self.vec_env.step(actions)
+                
+                # Reset policy 状态
+                actor_critic.reset(dones)
+                
+                # 从 extras 获取 time_outs
+                time_outs = extras.get("time_outs", torch.zeros_like(dones, dtype=torch.bool))
+                
+                # 反推 terminated（失败终止）
+                terminated = dones.bool() & ~time_outs
 
-            step_count += 1
+                # 更新步数（只统计被抽样且未完成的环境）
+                active = eval_mask & ~env_finished
+                env_steps += active.long()
 
-        # 恢复原始配置
-        self.command.cfg.eval_mode = original_eval_mode
+                # 更新统计（只处理被抽样的环境）
+                newly_done = dones.bool() & eval_mask & ~env_finished
+
+                if newly_done.any():
+                    # 获取终止条件标志
+                    clip_end_flags = self.term_mgr.get_term("clip_end") if "clip_end" in self.term_mgr.active_terms else None
+
+                    # 判断成功
+                    if clip_end_flags is not None:
+                        env_success |= newly_done & clip_end_flags & ~terminated
+                    
+                    # 标记已完成的环境
+                    env_finished |= newly_done
+
+                step_count += 1
+            
+            # 只统计被抽样的环境
+            eval_success = env_success[eval_mask]
+            eval_finished = env_finished[eval_mask]
+            eval_steps = env_steps[eval_mask]
+            eval_clip_len = env_clip_len[eval_mask]
+            eval_object_ids = env_object_ids[eval_mask]
+            
+            # 整体统计
+            success_rate = float(eval_success.float().mean())
+            episodes_evaluated = int(eval_finished.sum())
+            successes = int(eval_success.sum())
+            
+            progress = (eval_steps.float() / eval_clip_len.clamp(min=1).float()).clamp(max=1.0)
+            progress_rate = float(progress.mean())
+            
+            avg_steps = float(eval_steps.float().mean())
+
+            # 分物体统计
+            per_object_stats = {}
+            object_names = self.command.motion.object_names
+            
+            for obj_idx in range(num_objects):
+                obj_mask = (eval_object_ids == obj_idx)
+                if obj_mask.any():
+                    obj_success = eval_success[obj_mask]
+                    obj_finished = eval_finished[obj_mask]
+                    obj_progress = progress[obj_mask]
+                    
+                    obj_name = object_names[obj_idx]
+                    obj_success_rate = float(obj_success.float().mean())
+                    obj_episodes = int(obj_finished.sum())
+                    obj_successes = int(obj_success.sum())
+                    obj_progress_rate = float(obj_progress.mean())
+                    
+                    per_object_stats[obj_name] = {
+                        "success_rate": obj_success_rate,
+                        "progress_rate": obj_progress_rate,
+                        "episodes": obj_episodes,
+                        "successes": obj_successes,
+                        "num_envs": int(obj_mask.sum()),
+                    }
+
+            result = {
+                "success_rate": success_rate,
+                "progress_rate": progress_rate,
+                "episodes": episodes_evaluated,
+                "successes": successes,
+                "avg_steps": avg_steps,
+                "current_mass": self.current_mass,
+                "stage": self.stage,
+                "per_object": per_object_stats,
+                "eval_envs": len(eval_env_ids),
+                "total_envs": n,
+            }
+
+            # 打印整体结果
+            print(f"[MassCurriculum] 评估完成 (整体): 成功率 {success_rate*100:.1f}% ({successes}/{episodes_evaluated}), "
+                  f"进度率 {progress_rate*100:.1f}%, 平均步数 {avg_steps:.1f}")
+            
+            # 打印分物体结果
+            if per_object_stats:
+                print(f"[MassCurriculum] 分物体结果:")
+                for obj_name, stats in per_object_stats.items():
+                    print(f"  {obj_name}: 成功率 {stats['success_rate']*100:.1f}% "
+                          f"({stats['successes']}/{stats['episodes']}), "
+                          f"进度率 {stats['progress_rate']*100:.1f}%")
+
+            return result
         
-        # 计算成功率（与 eval.py ClipEvaluator.results 第 161 行一致）
-        success_rate = float(env_success.float().mean())
-        episodes_evaluated = int(env_finished.sum())
-        successes = int(env_success.sum())
-        
-        # 计算进度率（与 eval.py 第 150 行一致）
-        progress = (env_steps.float() / env_clip_len.clamp(min=1).float()).clamp(max=1.0)
-        progress_rate = float(progress.mean())
-        
-        avg_steps = float(env_steps.float().mean())
-
-        result = {
-            "success_rate": success_rate,
-            "progress_rate": progress_rate,
-            "episodes": episodes_evaluated,
-            "successes": successes,
-            "avg_steps": avg_steps,
-            "current_mass": self.current_mass,
-            "stage": self.stage,
-        }
-
-        print(f"[MassCurriculum] 评估完成: 成功率 {success_rate*100:.1f}% ({successes}/{episodes_evaluated}), "
-              f"进度率 {progress_rate*100:.1f}%, 平均步数 {avg_steps:.1f}")
-
-        return result
+        finally:
+            # 恢复原始 RSI 设置
+            self.command.cfg.rsi = original_rsi
 
     def update(self, eval_result: dict) -> None:
         """根据评估结果更新课程
@@ -251,22 +337,29 @@ class MassCurriculumManager:
         self.last_eval_iteration = self.iteration
 
         # 记录到历史
-        self.history.append(
-            {
-                "iteration": self.iteration,
-                "stage": self.stage,
-                "mass": self.current_mass,
-                "success_rate": success_rate,
-                "episodes": eval_result["episodes"],
-                "successes": eval_result["successes"],
-            }
-        )
+        history_entry = {
+            "iteration": self.iteration,
+            "stage": self.stage,
+            "mass": self.current_mass,
+            "success_rate": success_rate,
+            "episodes": eval_result["episodes"],
+            "successes": eval_result["successes"],
+            "per_object": eval_result.get("per_object", {}),
+        }
+        self.history.append(history_entry)
 
         # 记录到 tensorboard
         if self.tb_writer is not None:
             self.tb_writer.add_scalar("curriculum/mass", self.current_mass, self.iteration)
             self.tb_writer.add_scalar("curriculum/stage", self.stage, self.iteration)
             self.tb_writer.add_scalar("curriculum/success_rate", success_rate, self.iteration)
+            self.tb_writer.add_scalar("curriculum/progress_rate", eval_result["progress_rate"], self.iteration)
+            
+            # 记录分物体的统计
+            per_object = eval_result.get("per_object", {})
+            for obj_name, stats in per_object.items():
+                self.tb_writer.add_scalar(f"curriculum/success_rate_{obj_name}", stats["success_rate"], self.iteration)
+                self.tb_writer.add_scalar(f"curriculum/progress_rate_{obj_name}", stats["progress_rate"], self.iteration)
 
         # 判断是否晋升
         if success_rate >= self.cfg.success_threshold:

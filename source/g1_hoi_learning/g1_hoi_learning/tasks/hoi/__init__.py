@@ -47,21 +47,44 @@ def _make_env(cfg, **kwargs):
 
     # 根据物体类型添加额外场景物体
     _add_conditional_scene_objects(cfg, object_names)
+    
+    # 直接设置事件函数的 object_names 参数
+    if hasattr(cfg, 'events') and hasattr(cfg.events, 'reset_conditional_objects'):
+        cfg.events.reset_conditional_objects.params["object_names"] = object_names
+        # 传递初始 z 坐标配置
+        if has_h_frame := ("h_frame" in object_names):
+            cfg.events.reset_conditional_objects.params["h_frame_wall1_init_z"] = cfg.scene.h_frame_wall1.init_state.pos[2]
+            cfg.events.reset_conditional_objects.params["h_frame_wall2_init_z"] = cfg.scene.h_frame_wall2.init_state.pos[2]
+        if has_ladder := ("ladder" in object_names):
+            cfg.events.reset_conditional_objects.params["ladder_support1_init_z"] = cfg.scene.ladder_support1.init_state.pos[2]
+            cfg.events.reset_conditional_objects.params["ladder_support2_init_z"] = cfg.scene.ladder_support2.init_state.pos[2]
+            cfg.events.reset_conditional_objects.params["ladder_support3_init_z"] = cfg.scene.ladder_support3.init_state.pos[2]
+            cfg.events.reset_conditional_objects.params["ladder_support4_init_z"] = cfg.scene.ladder_support4.init_state.pos[2]
+        # print(f"[DEBUG] Set object_names in event config: {object_names}")
 
-    print(f"[INFO]: Resolved scene.object across {len(object_names)} object(s): {object_names}")
+    # print(f"[INFO]: Resolved scene.object across {len(object_names)} object(s): {object_names}")
     return ManagerBasedRLEnv(cfg=cfg, **kwargs)
 
 
 def _add_conditional_scene_objects(cfg, object_names: list[str]):
     """根据物体类型添加额外的场景物体（如墙）。
     
+    为所有环境添加额外物体，但通过事件管理器在reset时根据每个环境分配的
+    主物体类型来动态设置额外物体的位置（需要的环境放在正确位置，不需要的放在地下）。
+    
     Args:
         cfg: 环境配置
-        object_names: 当前场景中的物体名称列表
+        object_names: 当前场景中的物体名称列表（按环境分配顺序）
     """
+    has_h_frame = "h_frame" in object_names
+    has_ladder = "ladder" in object_names
+    
+    if not has_h_frame and not has_ladder:
+        return
+    
     # 如果包含 h_frame，添加两堵墙
-    if "h_frame" in object_names:
-        print(f"[INFO]: Detected h_frame object, adding walls to scene")
+    if has_h_frame:
+        # print(f"[INFO]: Detected h_frame object, adding walls to all environments")
         
         # 添加墙1
         cfg.scene.h_frame_wall1 = RigidObjectCfg(
@@ -76,10 +99,10 @@ def _add_conditional_scene_objects(cfg, object_names: list[str]):
                 ),
                 collision_props=sim_utils.CollisionPropertiesCfg(
                     contact_offset=0.005,
-),
+                ),
             ),
             init_state=RigidObjectCfg.InitialStateCfg(
-                pos=[-1.0, -3.0, 0.0],
+                pos=[-1.0, -3.0, 1.0],
                 rot=[0.707, 0.0, 0.0, 0.707],
             ),
         )
@@ -97,18 +120,18 @@ def _add_conditional_scene_objects(cfg, object_names: list[str]):
                 ),
                 collision_props=sim_utils.CollisionPropertiesCfg(
                     contact_offset=0.005,
-),
+                ),
             ),
             init_state=RigidObjectCfg.InitialStateCfg(
-                pos=[0.65, -6.0, 0.0],
+                pos=[0.65, -6.0, 1.0],
                 rot=[1.0, 0.0, 0.0, 0.0],
             ),
         )
 
-    if "ladder" in object_names:
-        print(f"[INFO]: Detected ladder object, adding ladder support to scene")
+    if has_ladder:
+        # print(f"[INFO]: Detected ladder object, adding ladder support to all environments")
 
-        # 添加墙1
+        # 添加支撑1
         cfg.scene.ladder_support1 = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/ladder_support1",
             spawn=sim_utils.UsdFileCfg(
@@ -124,12 +147,12 @@ def _add_conditional_scene_objects(cfg, object_names: list[str]):
                 ),
             ),
             init_state=RigidObjectCfg.InitialStateCfg(
-                pos=[0.0, 0.0, 0.0],
+                pos=[0.0, 0.0, 0.5],
                 rot=[1., 0.0, 0.0, 0.],
             ),
         )
 
-        # 添加墙2
+        # 添加支撑2
         cfg.scene.ladder_support2 = RigidObjectCfg(
             prim_path="{ENV_REGEX_NS}/ladder_support2",
             spawn=sim_utils.UsdFileCfg(
@@ -145,7 +168,7 @@ def _add_conditional_scene_objects(cfg, object_names: list[str]):
                 ),
             ),
             init_state=RigidObjectCfg.InitialStateCfg(
-                pos=[0.0, 0.0, 0.0],
+                pos=[0.0, 0.0, 0.5],
                 rot=[1., 0.0, 0.0, 0.],
             ),
         )
@@ -165,7 +188,7 @@ def _add_conditional_scene_objects(cfg, object_names: list[str]):
                 ),
             ),
             init_state=RigidObjectCfg.InitialStateCfg(
-                pos=[0.0, 0.0, 0.0],
+                pos=[0.0, 0.0, 0.7],
                 rot=[1., 0.0, 0.0, 0.],
             ),
         )
@@ -185,7 +208,7 @@ def _add_conditional_scene_objects(cfg, object_names: list[str]):
                 ),
             ),
             init_state=RigidObjectCfg.InitialStateCfg(
-                pos=[0.0, 0.0, 0.0],
+                pos=[0.0, 0.0, 0.7],
                 rot=[1., 0.0, 0.0, 0.],
             ),
         )

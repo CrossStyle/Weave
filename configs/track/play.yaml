@@ -36,11 +36,15 @@ env:
 #              - ./data/datasets/Weave/rollout/train/sub17_woodchair.npz
 #              - ./data/datasets/Weave/rollout/train/sub17_woodchair_020.npz
 #              - ./data/datasets/Weave/rollout/train/sub17_woodchair_010.npz
-              - ./data/datasets/Weave/rollout/train/sub17_woodchair_005.npz
+#              - ./data/datasets/Weave/rollout/train/sub17_woodchair_005.npz
 #                - ./data/datasets/Weave/rollout/train/sub17_woodchair_015.npz
 #              - ./source/g1_hoi_learning/g1_hoi_learning/objects/h_frame/h_frame_weave.npz
 #              - ./source/g1_hoi_learning/g1_hoi_learning/objects/ladder/ladder_weave_8s.npz
 #              - ./source/g1_hoi_learning/g1_hoi_learning/objects/ladder/ladder_weave.npz
+            - ./data/datasets/Weave/rollout/train/sub17_woodchair_005.npz
+            - ./source/g1_hoi_learning/g1_hoi_learning/objects/h_frame/h_frame_weave.npz
+#            - ./source/g1_hoi_learning/g1_hoi_learning/objects/ladder/ladder_weave_8s.npz
+            - ./source/g1_hoi_learning/g1_hoi_learning/objects/ladder/ladder_weave.npz
       rsi: false
 
 agent:

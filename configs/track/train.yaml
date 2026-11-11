@@ -34,10 +34,11 @@ env:
 #        - ./data/test/woodchair_46clip_var5.npz
 #        - ./data/test/floorlamp_33clip_var5_first_motion.npz
 #        - ./data/datasets/Weave/rollout/train/sub17_woodchair.npz
-#        - ./source/g1_hoi_learning/g1_hoi_learning/objects/h_frame/h_frame_weave.npz
-#        - ./data/eval/woodchair.npz
+        #        - ./data/eval/woodchair.npz
+          - ./data/datasets/Weave/rollout/train/sub17_woodchair_005.npz
+          - ./source/g1_hoi_learning/g1_hoi_learning/objects/h_frame/h_frame_weave.npz
           - ./source/g1_hoi_learning/g1_hoi_learning/objects/ladder/ladder_weave_8s.npz
-#          - ./source/g1_hoi_learning/g1_hoi_learning/objects/ladder/ladder_weave.npz
+          - ./source/g1_hoi_learning/g1_hoi_learning/objects/ladder/ladder_weave.npz
       rsi: true
 
   # ---- reward weights & params ----
